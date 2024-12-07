@@ -7,6 +7,11 @@ html = """
             .system { color: gray; }
             .error { color: red; }
             .chat { color: black; }
+           .command { color: blue; }
+            .response { color: green; }
+            .user { font-weight: normal; }
+            .agent { font-weight: bold; }
+            .system { font-style: italic; }
         </style>
     </head>
     <body>
@@ -14,6 +19,9 @@ html = """
         <div>
             <label for="username">用户名:</label>
             <input type="text" id="username" value="游客" />
+        </div>
+        <div>
+            <p>可用命令: /help, /clear, /rename &lt;新名字&gt;, /status</p>
         </div>
         <form action="" onsubmit="sendMessage(event)">
             <input type="text" id="messageText" autocomplete="off"/>
@@ -29,12 +37,18 @@ html = """
                 var message = document.createElement('li')
                 var data = JSON.parse(event.data)
                 
-                message.className = data.type
+                message.className = `${data.type} ${data.role}`
                 var time = new Date(data.timestamp).toLocaleTimeString()
                 var content = document.createTextNode(`[${time}] ${data.sender}: ${data.content}`)
                 
                 message.appendChild(content)
                 messages.appendChild(message)
+                
+                // 如果是清除命令的响应，清空消息列表
+                if (data.type === 'response' && data.content === '聊天记录已清除') {
+                    messages.innerHTML = '';
+                    messages.appendChild(message);
+                }
             };
             
             function sendMessage(event) {
@@ -44,6 +58,7 @@ html = """
                 if (input.value) {
                     var message = {
                         type: "chat",
+                        role: "user",
                         content: input.value,
                         sender: username.value
                     }
