@@ -23,6 +23,7 @@ class CommandType(str, Enum):
     STATUS = "status"      # 显示系统状态
     HISTORY = "history"    # 显示历史消息
     UNKNOWN = "unknown"    # 未知命令
+    FETCH = "fetch"        # 获取数据
 
 class Message(BaseModel):
     type: MessageType
@@ -60,15 +61,31 @@ class Message(BaseModel):
             command=cmd_type,
             data=kwargs
         )
+    
+    @classmethod
+    def create_system_command(
+        cls,
+        command: CommandType,
+        data: Optional[Dict[str, Any]] = None
+    ) -> 'Message':
+        """创建系统命令消息"""
+        return cls(
+            type=MessageType.COMMAND,
+            role=MessageRole.SYSTEM,
+            sender="system",
+            command=command,
+            data=data,
+            content=""
+        )
 
     @classmethod
     def create_response(cls, content: str, data: Optional[Dict[str, Any]] = None) -> 'Message':
         """创建响应消息"""
         return cls(
             type=MessageType.RESPONSE,
-            role=MessageRole.AGENT,
+            role=MessageRole.SYSTEM,
             content=content,
-            sender="Agent",
+            sender="system",
             data=data
         )
 
