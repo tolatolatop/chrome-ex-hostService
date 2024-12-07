@@ -184,7 +184,7 @@ async def test_fetch_command():
         assert response["type"] == "command"
         assert response["role"] == "system"
         data = FetchCommandData(**response["data"])
-        assert data.url == "https://example.com/data"
+        assert data.url == "https://example.com"
         assert data.method == "GET"
 
         websocket.send_text(Message.create_fetch_response({"content": "test_data"}).to_json())

@@ -19,7 +19,7 @@ class FetchCommand(BaseCommand):
 
     async def execute(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         data = FetchCommandData(
-            url="https://example.com/data",
+            url="https://example.com",
             method="GET",
         )
         await self.send_fetch_request(websocket, data)
