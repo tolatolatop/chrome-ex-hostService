@@ -17,11 +17,11 @@ RUN apt-get update \
 
 # 复制项目文件
 COPY requirements.txt .
-COPY app/ ./app/
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY app/ ./app/
 # 暴露端口
 EXPOSE 8000
 
