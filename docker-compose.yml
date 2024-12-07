@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  websocket:
+    build: .
+    container_name: websocket_chat
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+    environment:
+      - PYTHONPATH=/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # 如果需要添加数据库或其他服务，可以在这里添加 
