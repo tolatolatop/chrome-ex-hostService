@@ -5,6 +5,7 @@ from .command_handler import CommandHandler
 from .context import ContextManager
 from typing import Optional
 import uuid
+from app.exceptions import ChatError
 
 class WebSocketConnection:
     def __init__(self):
@@ -67,35 +68,44 @@ class WebSocketConnection:
                 
         except json.JSONDecodeError:
             await self.handle_error("消息格式错误")
+        except ChatError as e:
+            await self.handle_error(str(e))
+        except Exception as e:
+            await self.handle_error(f"消息处理错误: {str(e)}")
 
     async def handle_command_message(self, content: str, sender: str) -> None:
         """处理命令消息"""
         if not self.current_context:
-            await self.handle_error("无法找到聊天上下文")
+            await self.handle_error("会话未初始化")
             return
 
-        parts = content[1:].split()
-        command = parts[0]
-        args = parts[1:] if len(parts) > 1 else []
-        
-        message = Message.create_command(
-            command=command,
-            sender=sender,
-            new_name=" ".join(args) if command == "rename" else None,
-            count=args[0] if command == "history" and args else None
-        )
-        
-        # 保存命令消息到上下文
-        context = self.context_manager.get_context(self.current_context)
-        if context:
-            context.add_message(message)
-        
-        # 处理命令
-        await self.command_handler.handle_command(
-            self.websocket, 
-            message, 
-            self.current_context
-        )
+        try:
+            parts = content[1:].split()
+            command = parts[0]
+            args = parts[1:] if len(parts) > 1 else []
+            
+            message = Message.create_command(
+                command=command,
+                sender=sender,
+                new_name=" ".join(args) if command == "rename" else None,
+                count=args[0] if command == "history" and args else None
+            )
+            
+            # 保存命令消息到上下文
+            context = self.context_manager.get_context(self.current_context)
+            if context:
+                context.add_message(message)
+            
+            # 处理命令
+            await self.command_handler.handle_command(
+                self.websocket, 
+                message, 
+                self.current_context
+            )
+        except ChatError as e:
+            await self.handle_error(str(e))
+        except Exception as e:
+            await self.handle_error(f"命令执行错误: {str(e)}")
 
     async def handle_chat_message(self, content: str, sender: str) -> None:
         """处理聊天消息"""

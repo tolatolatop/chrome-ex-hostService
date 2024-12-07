@@ -1,4 +1,5 @@
 from app.models.message import Message, MessageType, CommandType, MessageRole
+from app.exceptions import NoContextError, NoUserContextError
 from .context import ContextManager
 from typing import Dict, Any, Callable, Awaitable, Optional
 from fastapi import WebSocket
@@ -12,15 +13,32 @@ class CommandHandler:
             CommandType.CLEAR: self.handle_clear,
             CommandType.RENAME: self.handle_rename,
             CommandType.STATUS: self.handle_status,
+            CommandType.HISTORY: self.handle_history,
             CommandType.UNKNOWN: self.handle_unknown
         }
 
+    def get_context(self, conversation_id: str):
+        """获取上下文，如果不存在则抛出异常"""
+        context = self.context_manager.get_context(conversation_id)
+        if not context:
+            raise NoContextError(f"无法找到聊天上下文: {conversation_id}")
+        return context
+
+    def get_user_context(self, conversation_id: str):
+        """获取用户上下文，如果不存在则抛出异常"""
+        context = self.get_context(conversation_id)
+        if not context.user_context:
+            raise NoUserContextError(f"无法找到用户上下文: {conversation_id}")
+        return context.user_context
+
     async def handle_command(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         """处理命令消息"""
-        if message.command in self.commands:
-            await self.commands[message.command](websocket, message, conversation_id)
-        else:
-            await self.handle_unknown(websocket, message, conversation_id)
+        try:
+            handler = self.commands.get(message.command, self.handle_unknown)
+            await handler(websocket, message, conversation_id)
+        except (NoContextError, NoUserContextError) as e:
+            response = Message.create_error(str(e))
+            await websocket.send_text(response.to_json())
 
     async def handle_help(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         """处理帮助命令"""
@@ -36,39 +54,28 @@ class CommandHandler:
 
     async def handle_clear(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         """处理清除命令"""
-        context = self.context_manager.get_context(conversation_id)
-        if context:
-            context.clear_history()
-            response = Message.create_response("聊天记录已清除")
-        else:
-            response = Message.create_error("无法找到聊天上下文")
+        context = self.get_context(conversation_id)
+        context.clear_history()
+        response = Message.create_response("聊天记录已清除")
         await websocket.send_text(response.to_json())
 
     async def handle_rename(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         """处理重命名命令"""
-        context = self.context_manager.get_context(conversation_id)
-        if not context or not context.user_context:
-            response = Message.create_error("无法找到用户上下文")
-            await websocket.send_text(response.to_json())
-            return
-
+        user_context = self.get_user_context(conversation_id)
         new_name = message.data.get("new_name", "")
-        if new_name:
-            self.context_manager.update_username(context.user_context.user_id, new_name)
-            response = Message.create_response(f"用户名已更改为: {new_name}")
-        else:
+        
+        if not new_name:
             response = Message.create_error("请指定新的用户名")
+        else:
+            self.context_manager.update_username(user_context.user_id, new_name)
+            response = Message.create_response(f"用户名已更改为: {new_name}")
+        
         await websocket.send_text(response.to_json())
 
     async def handle_status(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
         """处理状态命令"""
-        context = self.context_manager.get_context(conversation_id)
-        if not context or not context.user_context:
-            response = Message.create_error("无法找到聊天上下文")
-            await websocket.send_text(response.to_json())
-            return
-
-        user_context = context.user_context
+        context = self.get_context(conversation_id)
+        user_context = self.get_user_context(conversation_id)
         current_time = datetime.now()
         
         status_data = {
@@ -80,10 +87,7 @@ class CommandHandler:
             "last_active": user_context.last_active.isoformat()
         }
         
-        response = Message.create_response(
-            "系统状态",
-            data=status_data
-        )
+        response = Message.create_response("系统状态", data=status_data)
         await websocket.send_text(response.to_json())
 
     async def handle_history(self, websocket: WebSocket, message: Message, conversation_id: str) -> None:
@@ -93,12 +97,7 @@ class CommandHandler:
         except ValueError:
             count = 5
 
-        context = self.context_manager.get_context(conversation_id)
-        if not context:
-            response = Message.create_error("无法找到聊天上下文")
-            await websocket.send_text(response.to_json())
-            return
-
+        context = self.get_context(conversation_id)
         messages = context.get_last_n_messages(count)
         history_text = "\n".join([
             f"[{msg.timestamp.strftime('%H:%M:%S')}] {msg.sender}: {msg.content}"
