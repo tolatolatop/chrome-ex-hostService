@@ -21,6 +21,7 @@ class CommandType(str, Enum):
     CLEAR = "clear"        # 清除聊天记录
     RENAME = "rename"      # 重命名用户
     STATUS = "status"      # 显示系统状态
+    HISTORY = "history"    # 显示历史消息
     UNKNOWN = "unknown"    # 未知命令
 
 class Message(BaseModel):

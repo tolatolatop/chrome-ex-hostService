@@ -8,8 +8,8 @@ import uuid
 
 class WebSocketConnection:
     def __init__(self):
-        self.command_handler = CommandHandler()
         self.context_manager = ContextManager()
+        self.command_handler = CommandHandler(self.context_manager)
         self.websocket: Optional[WebSocket] = None
         self.current_context: Optional[str] = None
 
@@ -70,6 +70,10 @@ class WebSocketConnection:
 
     async def handle_command_message(self, content: str, sender: str) -> None:
         """处理命令消息"""
+        if not self.current_context:
+            await self.handle_error("无法找到聊天上下文")
+            return
+
         parts = content[1:].split()
         command = parts[0]
         args = parts[1:] if len(parts) > 1 else []
@@ -77,16 +81,21 @@ class WebSocketConnection:
         message = Message.create_command(
             command=command,
             sender=sender,
-            new_name=" ".join(args) if command == "rename" else None
+            new_name=" ".join(args) if command == "rename" else None,
+            count=args[0] if command == "history" and args else None
         )
         
         # 保存命令消息到上下文
-        if self.current_context:
-            context = self.context_manager.get_context(self.current_context)
-            if context:
-                context.add_message(message)
+        context = self.context_manager.get_context(self.current_context)
+        if context:
+            context.add_message(message)
         
-        await self.command_handler.handle_command(self.websocket, message)
+        # 处理命令
+        await self.command_handler.handle_command(
+            self.websocket, 
+            message, 
+            self.current_context
+        )
 
     async def handle_chat_message(self, content: str, sender: str) -> None:
         """处理聊天消息"""
@@ -105,7 +114,7 @@ class WebSocketConnection:
             await self.send_message(error_msg)
 
     async def cleanup(self) -> None:
-        """清理��接"""
+        """清理接"""
         if self.current_context:
             self.context_manager.close_context(self.current_context)
             self.current_context = None
