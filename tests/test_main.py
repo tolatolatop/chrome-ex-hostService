@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocket
 from app.main import app
 from app.models.message import Message, MessageType, MessageRole, CommandType
+from app.commands.fetch_command import FetchCommandData
 import json
 from datetime import datetime
 
@@ -46,8 +47,8 @@ def test_message_factory_methods():
     # 测试响应消息创建
     resp_msg = Message.create_response("测试响应")
     assert resp_msg.type == MessageType.RESPONSE
-    assert resp_msg.role == MessageRole.AGENT
-    assert resp_msg.sender == "Agent"
+    assert resp_msg.role == MessageRole.SYSTEM
+    assert resp_msg.sender == "system"
 
     # 测试错误消息创建
     error_msg = Message.create_error("测试错误")
@@ -107,7 +108,7 @@ async def test_command_handling():
         
         response = websocket.receive_json()
         assert response["type"] == "response"
-        assert response["role"] == "agent"
+        assert response["role"] == "system"
         assert "可用命令" in response["content"]
         
         # 测试重命名命令
@@ -121,7 +122,7 @@ async def test_command_handling():
         
         response = websocket.receive_json()
         assert response["type"] == "response"
-        assert response["role"] == "agent"
+        assert response["role"] == "system"
         assert "用户名已更改为: 新用户" in response["content"]
 
 def test_invalid_message_format():
@@ -161,3 +162,37 @@ async def test_unknown_command():
         assert response["type"] == "error"
         assert response["role"] == "system"
         assert "未知命令" in response["content"]
+
+@pytest.mark.asyncio
+async def test_fetch_command():
+    """测试fetch命令"""
+    with client.websocket_connect("/ws") as websocket:
+        # 跳过欢迎消息
+        websocket.receive_json()
+        
+        # 测试fetch命令
+        fetch_message = {
+            "type": "chat",
+            "role": "user",
+            "content": "/fetch test_data",
+            "sender": "测试用户"
+        }
+        websocket.send_json(fetch_message)
+        
+        # 测试接收fetch响应
+        response = websocket.receive_json()
+        assert response["type"] == "command"
+        assert response["role"] == "system"
+        data = FetchCommandData(**response["data"])
+        assert data.url == "https://example.com/data"
+        assert data.method == "GET"
+
+        websocket.send_text(Message.create_fetch_response({"content": "test_data"}).to_json())
+
+        # 验证返回的数据结构
+        response = websocket.receive_json()
+        assert response["type"] == "response"
+        assert response["role"] == "system"
+        data = response["data"]
+        assert isinstance(data, dict)
+        assert data["content"] == "test_data"

@@ -15,6 +15,7 @@ class MessageType(str, Enum):
     RESPONSE = "response"   # 命令响应
     ERROR = "error"         # 错误消息
     SYSTEM = "system"       # 系统消息
+    FETCH_RESPONSE = "fetch_response" # 获取数据响应
 
 class CommandType(str, Enum):
     HELP = "help"          # 显示帮助信息
@@ -86,6 +87,17 @@ class Message(BaseModel):
             role=MessageRole.SYSTEM,
             content=content,
             sender="system",
+            data=data
+        )
+    
+    @classmethod    
+    def create_fetch_response(cls, data: Dict[str, Any]) -> 'Message':
+        """创建获取数据响应消息"""
+        return cls(
+            type=MessageType.FETCH_RESPONSE,
+            role=MessageRole.AGENT,
+            content="",
+            sender="agent",
             data=data
         )
 
