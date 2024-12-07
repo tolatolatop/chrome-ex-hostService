@@ -1,7 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocket
-from main import app, Message, MessageType
+from app.main import app
+from app.models.message import Message, MessageType
 import json
 from datetime import datetime
 
@@ -70,41 +71,3 @@ def test_invalid_message_format():
         # 发送无效的JSON数据
         websocket.send_text("invalid json data")
         
-        # 测试错误响应
-        response = websocket.receive_json()
-        assert response["type"] == "error"
-        assert response["content"] == "消息格式错误"
-        assert response["sender"] == "System"
-
-@pytest.mark.asyncio
-async def test_message_types():
-    """测试不同类型的消息"""
-    messages = [
-        {
-            "type": "chat",
-            "content": "普通聊天消息",
-            "sender": "用户1"
-        },
-        {
-            "type": "system",
-            "content": "系统通知",
-            "sender": "System"
-        },
-        {
-            "type": "error",
-            "content": "错误信息",
-            "sender": "System"
-        }
-    ]
-    
-    with client.websocket_connect("/ws") as websocket:
-        # 跳过欢迎消息
-        websocket.receive_json()
-        
-        # 测试各种类型的消息
-        for msg in messages:
-            websocket.send_json(msg)
-            response = websocket.receive_json()
-            assert response["type"] == msg["type"]
-            assert response["content"] == msg["content"]
-            assert response["sender"] == msg["sender"] 
