@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 import json
 import logging
 from urllib.parse import urlencode
@@ -13,50 +13,43 @@ logger = logging.getLogger(__name__)
 
 class AddFavCommand(FetchCommand):
     command_name = CommandType.ADD_FAV
+    
+    # 定义命令参数
+    command_params = [
+        {
+            "name": "rid",
+            "help": "视频/专栏ID",
+            "type": str,
+            "required": True
+        },
+        {
+            "name": "add_media_ids",
+            "help": "目标收藏夹ID",
+            "type": str,
+            "required": True
+        }
+    ]
 
     async def get_params(self, websocket: WebSocket) -> str:
         """从 WebSocket 获取参数并使用 urllib 进行参数拼接"""
         try:
-            # 获取必需参数
-            rid = await self.get_command_param(
-                websocket,
-                "rid",
-                "视频/专栏ID",
-                str
-            )
+            params = {}
             
-            add_media_ids = await self.get_command_param(
-                websocket,
-                "add_media_ids",
-                "目标收藏夹ID",
-                str
-            )
+            # 遍历参数定义获取参数值
+            for param in self.command_params:
+                value = await self.get_command_param(
+                    websocket,
+                    param["name"],
+                    param["help"],
+                    param["type"],
+                    default=param.get("default") if not param.get("required") else None
+                )
+                params[param["name"]] = value
             
-            # 获取可选参数
-            type_value = await self.get_command_param(
-                websocket,
-                "type",
-                "内容类型，默认42(专栏)",
-                int,
-                default=42
-            )
-            
-            platform = await self.get_command_param(
-                websocket,
-                "platform",
-                "平台",
-                str,
-                default="web"
-            )
-            
-            # 使用 urlencode 构建参数字符串
-            params = {
-                'rid': rid,
-                'type': type_value,
-                'add_media_ids': add_media_ids,
-                'del_media_ids': '',  # 保持空字符串
-                'platform': platform
-            }
+            # 添加固定的空参数
+            params["del_media_ids"] = ""
+            params["platform"] = "web"
+            params["type"] = 42
             
             return urlencode(params)
             
