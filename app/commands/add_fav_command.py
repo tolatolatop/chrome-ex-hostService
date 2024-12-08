@@ -1,6 +1,7 @@
 from typing import Dict, Any
 import json
 import logging
+from urllib.parse import urlencode
 
 from .fetch_command import FetchCommand, FetchCommandData
 from fastapi import WebSocket
@@ -14,7 +15,7 @@ class AddFavCommand(FetchCommand):
     command_name = CommandType.ADD_FAV
 
     async def get_params(self, websocket: WebSocket) -> str:
-        """从 WebSocket 获取参数"""
+        """从 WebSocket 获取参数并使用 urllib 进行参数拼接"""
         try:
             # 获取必需参数
             rid = await self.get_command_param(
@@ -48,7 +49,16 @@ class AddFavCommand(FetchCommand):
                 default="web"
             )
             
-            return f"rid={rid}&type={type_value}&add_media_ids={add_media_ids}&del_media_ids=&platform={platform}"
+            # 使用 urlencode 构建参数字符串
+            params = {
+                'rid': rid,
+                'type': type_value,
+                'add_media_ids': add_media_ids,
+                'del_media_ids': '',  # 保持空字符串
+                'platform': platform
+            }
+            
+            return urlencode(params)
             
         except ParamTypeError as e:
             await self.send_error(websocket, str(e))
