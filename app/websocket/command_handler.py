@@ -10,6 +10,7 @@ from app.commands.status_command import StatusCommand
 from app.commands.history_command import HistoryCommand
 from app.commands.unknown_command import UnknownCommand
 from app.commands.fetch_command import FetchCommand
+from app.commands.add_fav_command import AddFavCommand
 from .context import ContextManager
 
 class CommandHandler:
@@ -26,7 +27,8 @@ class CommandHandler:
             RenameCommand,
             StatusCommand,
             HistoryCommand,
-            FetchCommand
+            FetchCommand,
+            AddFavCommand
         ])
 
     def register_commands(self, command_classes: list[Type[BaseCommand]]) -> None:

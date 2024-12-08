@@ -25,6 +25,8 @@ class CommandType(str, Enum):
     HISTORY = "history"    # 显示历史消息
     UNKNOWN = "unknown"    # 未知命令
     FETCH = "fetch"        # 获取数据
+    ADD_FAV = "add_fav"    # 添加收藏
+    PARAMS_REQUEST = "params_request"  # 添加这一行
 
 class Message(BaseModel):
     type: MessageType

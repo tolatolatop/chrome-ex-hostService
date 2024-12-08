@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Union
 import json
 
 import httpx
@@ -12,7 +12,7 @@ class FetchCommandData(BaseModel):
     url: str
     method: str
     headers: Dict[str, str] = {}
-    data: Dict[str, Any] = {}
+    data: Union[Dict[str, Any], str] = None
 
 class FetchCommand(BaseCommand):
     command_name = CommandType.FETCH

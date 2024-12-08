@@ -13,3 +13,8 @@ class NoContextError(ContextError):
 class NoUserContextError(ContextError):
     """找不到用户上下文的错误"""
     pass 
+
+
+class ParamTypeError(Exception):
+    """参数类型错误"""
+    pass
