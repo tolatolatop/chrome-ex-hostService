@@ -12,7 +12,7 @@ class FetchCommandData(BaseModel):
     url: str
     method: str
     headers: Dict[str, str] = {}
-    data: Union[Dict[str, Any], str] = None
+    data: Optional[Union[Dict[str, Any], str]] = None
 
 class FetchCommand(BaseCommand):
     command_name = CommandType.FETCH
