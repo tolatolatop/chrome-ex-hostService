@@ -26,22 +26,32 @@ class WebSocketConnection:
 
     def disconnect(self, connection_id: str):
         """断开指定的websocket连接"""
-        if connection_id in self.active_connections:
-            self.active_connections.pop(connection_id)
-            self.connection_contexts.pop(connection_id)
+        self.active_connections.pop(connection_id, None)
+        self.connection_contexts.pop(connection_id, None)
 
     async def send_message(self, connection_id: str, message: str):
         """向指定的websocket连接发送消息"""
         if connection_id not in self.active_connections:
             raise ChatError(f"Connection {connection_id} not found")
-        await self.active_connections[connection_id].send_text(message)
+        try:
+            await self.active_connections[connection_id].send_text(message)
+        except Exception as e:
+            self.disconnect(connection_id)
+            raise ChatError(f"Failed to send message: {str(e)}") from e
 
     async def broadcast(self, message: str, exclude: Optional[Set[str]] = None):
         """向所有websocket连接广播消息，可以选择排除特定的连接"""
         exclude = exclude or set()
-        for connection_id, connection in self.active_connections.items():
-            if connection_id not in exclude:
+        for connection_id in list(self.active_connections.keys()):
+            if connection_id in exclude:
+                continue
+            connection = self.active_connections.get(connection_id)
+            if connection is None:
+                continue
+            try:
                 await connection.send_text(message)
+            except Exception as e:
+                self.disconnect(connection_id)
 
     def set_context(self, connection_id: str, key: str, value: any):
         """为指定的websocket连接设置上下文值"""
@@ -103,12 +113,7 @@ class WebSocketConnection:
         await self.broadcast(data, exclude={connection_id})
 
     async def handle_message(self, connection_id: str, data: str) -> None:
-        """处理接收到的WebSocket消息
-
-        Args:
-            connection_id: 发送消息的连接ID
-            data: 接收到的原始消息数据
-        """
+        """处理接收到的WebSocket消息"""
         try:
             message_data = json.loads(data)
             if not isinstance(message_data, dict):
@@ -121,41 +126,42 @@ class WebSocketConnection:
             if handler:
                 await handler(connection_id, message_data)
             else:
-                # 如果没有找到对应的处理器，使用普通消息处理器
-                await self._handle_normal_message(connection_id, message_data)
-
+                if message_type != "message":  # 避免重复处理默认类型
+                    await self.send_message(connection_id, json.dumps({
+                        "type": "error",
+                        "message": f"Unsupported message type: {message_type}"
+                    }))
+                else:
+                    await self._handle_normal_message(connection_id, message_data)
         except json.JSONDecodeError:
             await self._handle_raw_message(connection_id, data)
         except ChatError as e:
-            # 发送错误消息给发送者
-            await self.send_message(connection_id, json.dumps({
-                "type": "error",
-                "message": str(e)
-            }))
+            try:
+                await self.send_message(connection_id, json.dumps({
+                    "type": "error",
+                    "message": str(e)
+                }))
+            except:
+                pass
 
     async def handle_connection(self, websocket: WebSocket):
         """处理WebSocket连接的完整生命周期"""
         connection_id = await self.connect(websocket)
         try:
-            # 发送连接成功消息，包含连接ID
             await self.send_message(connection_id, json.dumps({
                 "type": "connection_established",
                 "connection_id": connection_id
             }))
-
-            # 广播新用户加入消息
             await self.broadcast(json.dumps({
                 "type": "user_joined",
                 "connection_id": connection_id
             }), exclude={connection_id})
 
             while True:
-                # 接收消息
                 data = await websocket.receive_text()
                 await self.handle_message(connection_id, data)
 
         except Exception as e:
-            # 发送错误消息给客户端
             try:
                 await self.send_message(connection_id, json.dumps({
                     "type": "error",
@@ -164,7 +170,6 @@ class WebSocketConnection:
             except:
                 pass
         finally:
-            # 广播用户离开消息
             try:
                 await self.broadcast(json.dumps({
                     "type": "user_left",
@@ -172,5 +177,4 @@ class WebSocketConnection:
                 }), exclude={connection_id})
             except:
                 pass
-            # 断开连接
             self.disconnect(connection_id)
