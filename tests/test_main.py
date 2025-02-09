@@ -116,12 +116,24 @@ async def test_error_handling(test_client):
     with test_client.websocket_connect("/ws") as client:
         client.receive_text()  # 跳过连接消息
 
-        # 发送无效JSON
+        # 测试发送无效JSON
+        print("\n=== 测试发送无效JSON ===")
         client.send_text("invalid json")
         response = client.receive_text()
-        assert json.loads(response)["type"] == "message"
+        error_data = json.loads(response)
+        assert error_data["type"] == "error"
+        assert error_data["message"] == "Invalid JSON format"
 
-        # 发送未知消息类型
+        # 测试发送非字典JSON
+        print("\n=== 测试发送非字典JSON ===")
+        client.send_text(json.dumps(["array", "not", "object"]))
+        response = client.receive_text()
+        error_data = json.loads(response)
+        assert error_data["type"] == "error"
+        assert error_data["message"] == "Message must be a JSON object"
+
+        # 测试发送未知消息类型
+        print("\n=== 测试发送未知消息类型 ===")
         client.send_text(json.dumps({
             "type": "unknown_type",
             "content": "test"
@@ -131,7 +143,8 @@ async def test_error_handling(test_client):
         assert error_data["type"] == "error"
         assert "Unsupported message type" in error_data["message"]
 
-        # 发送无效的私聊目标
+        # 测试发送无效的私聊目标
+        print("\n=== 测试发送无效的私聊目标 ===")
         client.send_text(json.dumps({
             "type": "private_message",
             "target": "invalid_id",
@@ -139,7 +152,19 @@ async def test_error_handling(test_client):
         }))
         response = client.receive_text()
         error_data = json.loads(response)
+        assert error_data["type"] == "error"
         assert "Target connection" in error_data["message"]
+
+        # 测试发送缺少必要字段的私聊消息
+        print("\n=== 测试发送缺少目标的私聊消息 ===")
+        client.send_text(json.dumps({
+            "type": "private_message",
+            "content": "test"
+        }))
+        response = client.receive_text()
+        error_data = json.loads(response)
+        assert error_data["type"] == "error"
+        assert "must have a target" in error_data["message"]
 
 
 @pytest.mark.asyncio

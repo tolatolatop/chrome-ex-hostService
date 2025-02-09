@@ -117,7 +117,10 @@ class WebSocketConnection:
         try:
             message_data = json.loads(data)
             if not isinstance(message_data, dict):
-                await self._handle_raw_message(connection_id, data)
+                await self.send_message(connection_id, json.dumps({
+                    "type": "error",
+                    "message": "Message must be a JSON object"
+                }))
                 return
 
             message_type = message_data.get("type", "message")
@@ -134,7 +137,11 @@ class WebSocketConnection:
                 else:
                     await self._handle_normal_message(connection_id, message_data)
         except json.JSONDecodeError:
-            await self._handle_raw_message(connection_id, data)
+            # 发送JSON解析错误消息给发送者
+            await self.send_message(connection_id, json.dumps({
+                "type": "error",
+                "message": "Invalid JSON format"
+            }))
         except ChatError as e:
             try:
                 await self.send_message(connection_id, json.dumps({
