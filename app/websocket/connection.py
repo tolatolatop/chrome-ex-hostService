@@ -1,6 +1,6 @@
 from fastapi import WebSocket
 import json
-from typing import Optional, Dict, Set, Any
+from typing import Optional, Dict, Set, Any, Callable
 import uuid
 from app.exceptions import ChatError
 
@@ -9,6 +9,12 @@ class WebSocketConnection:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.connection_contexts: Dict[str, Dict] = {}
+        # 初始化消息处理器映射
+        self._message_handlers: Dict[str, Callable] = {
+            "private_message": self._handle_private_message,
+            "broadcast": self._handle_broadcast_message,
+            "message": self._handle_normal_message,
+        }
 
     async def connect(self, websocket: WebSocket) -> str:
         """建立新的websocket连接，返回连接的唯一标识符"""
@@ -57,6 +63,45 @@ class WebSocketConnection:
         """检查指定的连接是否存在且活动"""
         return connection_id in self.active_connections
 
+    async def _handle_private_message(self, connection_id: str, message_data: Dict[str, Any]) -> None:
+        """处理私聊消息"""
+        if "target" not in message_data:
+            raise ChatError("Private message must have a target")
+
+        target_id = message_data["target"]
+        content = message_data.get("content", "")
+
+        if not self.is_connected(target_id):
+            raise ChatError(f"Target connection {target_id} not found")
+
+        await self.send_message(target_id, json.dumps({
+            "type": "private_message",
+            "from": connection_id,
+            "content": content
+        }))
+
+    async def _handle_broadcast_message(self, connection_id: str, message_data: Dict[str, Any]) -> None:
+        """处理广播消息"""
+        content = message_data.get("content", "")
+        await self.broadcast(json.dumps({
+            "type": "broadcast",
+            "from": connection_id,
+            "content": content
+        }), exclude={connection_id})
+
+    async def _handle_normal_message(self, connection_id: str, message_data: Dict[str, Any]) -> None:
+        """处理普通消息"""
+        content = message_data.get("content", "")
+        await self.broadcast(json.dumps({
+            "type": "message",
+            "from": connection_id,
+            "content": content
+        }), exclude={connection_id})
+
+    async def _handle_raw_message(self, connection_id: str, data: str) -> None:
+        """处理原始文本消息"""
+        await self.broadcast(data, exclude={connection_id})
+
     async def handle_message(self, connection_id: str, data: str) -> None:
         """处理接收到的WebSocket消息
 
@@ -67,39 +112,26 @@ class WebSocketConnection:
         try:
             message_data = json.loads(data)
             if not isinstance(message_data, dict):
-                await self.broadcast(data, exclude={connection_id})
+                await self._handle_raw_message(connection_id, data)
                 return
 
             message_type = message_data.get("type", "message")
-            content = message_data.get("content", "")
+            handler = self._message_handlers.get(message_type)
 
-            if message_type == "private_message" and "target" in message_data:
-                # 处理私聊消息
-                target_id = message_data["target"]
-                if self.is_connected(target_id):
-                    await self.send_message(target_id, json.dumps({
-                        "type": "private_message",
-                        "from": connection_id,
-                        "content": content
-                    }))
-            elif message_type == "broadcast":
-                # 处理广播消息
-                await self.broadcast(json.dumps({
-                    "type": "broadcast",
-                    "from": connection_id,
-                    "content": content
-                }), exclude={connection_id})
+            if handler:
+                await handler(connection_id, message_data)
             else:
-                # 处理普通消息
-                await self.broadcast(json.dumps({
-                    "type": "message",
-                    "from": connection_id,
-                    "content": content
-                }), exclude={connection_id})
+                # 如果没有找到对应的处理器，使用普通消息处理器
+                await self._handle_normal_message(connection_id, message_data)
 
         except json.JSONDecodeError:
-            # 如果消息不是JSON格式，简单地广播原始消息
-            await self.broadcast(data, exclude={connection_id})
+            await self._handle_raw_message(connection_id, data)
+        except ChatError as e:
+            # 发送错误消息给发送者
+            await self.send_message(connection_id, json.dumps({
+                "type": "error",
+                "message": str(e)
+            }))
 
     async def handle_connection(self, websocket: WebSocket):
         """处理WebSocket连接的完整生命周期"""
