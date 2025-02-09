@@ -1,148 +1,58 @@
 from fastapi import WebSocket
 import json
-from app.models.message import Message, MessageType, MessageRole, CommandType
-from .command_handler import CommandHandler
-from .context import ContextManager
-from typing import Optional
+from typing import Optional, Dict, Set
 import uuid
 from app.exceptions import ChatError
 
+
 class WebSocketConnection:
     def __init__(self):
-        self.context_manager = ContextManager()
-        self.command_handler = CommandHandler(self.context_manager)
-        self.websocket: Optional[WebSocket] = None
-        self.current_context: Optional[str] = None
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.connection_contexts: Dict[str, Dict] = {}
 
-    async def initialize_connection(self, websocket: WebSocket) -> None:
-        """初始化WebSocket连接"""
-        self.websocket = websocket
-        await self.websocket.accept()
-        
-        # 创建新的对话上下文
-        conversation_id = str(uuid.uuid4())
-        user_id = str(uuid.uuid4())  # 在实际应用中，这应该从认证系统获取
-        self.current_context = conversation_id
-        self.context_manager.create_context(conversation_id, user_id, "游客")
-        
-        await self.send_welcome_message()
+    async def connect(self, websocket: WebSocket) -> str:
+        """建立新的websocket连接，返回连接的唯一标识符"""
+        await websocket.accept()
+        connection_id = str(uuid.uuid4())
+        self.active_connections[connection_id] = websocket
+        self.connection_contexts[connection_id] = {}
+        return connection_id
 
-    async def send_welcome_message(self) -> None:
-        """发送欢迎消息"""
-        welcome_msg = Message(
-            type=MessageType.SYSTEM,
-            role=MessageRole.SYSTEM,
-            content="欢迎加入聊天室！输入 /help 查看可用命令",
-            sender="System"
-        )
-        await self.send_message(welcome_msg)
+    def disconnect(self, connection_id: str):
+        """断开指定的websocket连接"""
+        if connection_id in self.active_connections:
+            self.active_connections.pop(connection_id)
+            self.connection_contexts.pop(connection_id)
 
-    async def send_message(self, message: Message) -> None:
-        """发送消息并保存到上下文"""
-        if self.websocket and self.current_context:
-            await self.websocket.send_text(message.to_json())
-            context = self.context_manager.get_context(self.current_context)
-            if context:
-                context.add_message(message)
+    async def send_message(self, connection_id: str, message: str):
+        """向指定的websocket连接发送消息"""
+        if connection_id not in self.active_connections:
+            raise ChatError(f"Connection {connection_id} not found")
+        await self.active_connections[connection_id].send_text(message)
 
-    async def handle_chat_loop(self) -> None:
-        """处理持续的聊天对话"""
-        try:
-            while True:
-                data = await self.websocket.receive_text()
-                await self.process_message(data)
-        except Exception as e:
-            await self.handle_error(str(e))
+    async def broadcast(self, message: str, exclude: Optional[Set[str]] = None):
+        """向所有websocket连接广播消息，可以选择排除特定的连接"""
+        exclude = exclude or set()
+        for connection_id, connection in self.active_connections.items():
+            if connection_id not in exclude:
+                await connection.send_text(message)
 
-    async def process_message(self, data: str) -> None:
-        """处理接收到的消息"""
-        try:
-            message_data = json.loads(data)
-            content = message_data["content"]
-            sender = message_data["sender"]
+    def set_context(self, connection_id: str, key: str, value: any):
+        """为指定的websocket连接设置上下文值"""
+        if connection_id not in self.connection_contexts:
+            raise ChatError(f"Connection {connection_id} not found")
+        self.connection_contexts[connection_id][key] = value
 
-            if content.startswith('/'):
-                await self.handle_command_message(content, sender)
-            else:
-                await self.handle_chat_message(content, sender)
-                
-        except json.JSONDecodeError:
-            await self.handle_error("消息格式错误")
-        except ChatError as e:
-            await self.handle_error(str(e))
-        except Exception as e:
-            await self.handle_error(f"消息处理错误: {str(e)}")
+    def get_context(self, connection_id: str, key: str, default: any = None) -> any:
+        """获取指定websocket连接的上下文值"""
+        if connection_id not in self.connection_contexts:
+            raise ChatError(f"Connection {connection_id} not found")
+        return self.connection_contexts[connection_id].get(key, default)
 
-    async def handle_command_message(self, content: str, sender: str) -> None:
-        """处理命令消息"""
-        if not self.current_context:
-            await self.handle_error("会话未初始化")
-            return
+    def get_all_connections(self) -> Set[str]:
+        """获取所有活动连接的ID"""
+        return set(self.active_connections.keys())
 
-        try:
-            parts = content[1:].split()
-            command = parts[0]
-            args = parts[1:] if len(parts) > 1 else []
-            
-            message = Message.create_command(
-                command=command,
-                sender=sender,
-                new_name=" ".join(args) if command == "rename" else None,
-                count=args[0] if command == "history" and args else None
-            )
-            
-            # 保存命令消息到上下文
-            context = self.context_manager.get_context(self.current_context)
-            if context:
-                context.add_message(message)
-            
-            # 处理命令
-            await self.command_handler.handle_command(
-                self.websocket, 
-                message, 
-                self.current_context
-            )
-        except ChatError as e:
-            await self.handle_error(str(e))
-        except Exception as e:
-            await self.handle_error(f"命令执行错误: {str(e)}")
-
-    async def handle_chat_message(self, content: str, sender: str) -> None:
-        """处理聊天消息"""
-        message = Message(
-            type=MessageType.CHAT,
-            role=MessageRole.USER,
-            content=content,
-            sender=sender
-        )
-        await self.send_message(message)
-
-    async def handle_error(self, error_message: str) -> None:
-        """处理错误"""
-        if self.websocket:
-            error_msg = Message.create_error(error_message)
-            await self.send_message(error_msg)
-
-    async def cleanup(self) -> None:
-        """清理接"""
-        if self.current_context:
-            self.context_manager.close_context(self.current_context)
-            self.current_context = None
-            
-        if self.websocket:
-            try:
-                await self.websocket.close()
-            except Exception:
-                pass
-            finally:
-                self.websocket = None
-
-    async def handle_connection(self, websocket: WebSocket) -> None:
-        """主要的连接处理函数"""
-        try:
-            await self.initialize_connection(websocket)
-            await self.handle_chat_loop()
-        except Exception as e:
-            await self.handle_error(f"发生错误: {str(e)}")
-        finally:
-            await self.cleanup()
+    def is_connected(self, connection_id: str) -> bool:
+        """检查指定的连接是否存在且活动"""
+        return connection_id in self.active_connections
