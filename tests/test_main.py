@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 import json
 import asyncio
+from typing import List, Dict, Any, AsyncGenerator
+import aiohttp
 
 
 @pytest.fixture(scope="module")
@@ -189,3 +191,165 @@ async def test_concurrent_connections(test_client):
 
     # 验证所有连接ID唯一
     assert len(set(results)) == 3
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_basic(test_client):
+    """测试基本的非流式对话功能"""
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [
+            {"role": "user", "content": "你好"}
+        ],
+        "stream": False
+    })
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # 验证响应格式
+    assert "id" in data
+    assert data["model"] == "gpt-3.5-turbo"
+    assert isinstance(data["created"], int)
+    assert len(data["choices"]) == 1
+    assert "message" in data["choices"][0]
+    assert "role" in data["choices"][0]["message"]
+    assert "content" in data["choices"][0]["message"]
+    assert "finish_reason" in data["choices"][0]
+    assert "usage" in data
+
+    # 验证usage字段
+    assert "prompt_tokens" in data["usage"]
+    assert "completion_tokens" in data["usage"]
+    assert "total_tokens" in data["usage"]
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_stream(test_client):
+    """测试流式对话功能"""
+    async with aiohttp.ClientSession() as session:
+        async with session.post("http://localhost:8000/v1/chat/completions",
+                                json={
+                "messages": [{"role": "user", "content": "你好"}],
+                "stream": True
+                                    }
+        ) as response:
+            assert response.status == 200
+
+            # 收集所有的流式响应
+            chunks: List[Dict[str, Any]] = []
+            content = ""
+
+            async for line in response.content:
+                line = line.decode('utf-8').strip()
+                if line.startswith('data: '):
+                    if line == 'data: [DONE]':
+                        break
+
+                    data = json.loads(line[6:])  # 去掉 "data: " 前缀
+                    chunks.append(data)
+
+                    # 收集内容
+                    if "content" in data["choices"][0]["delta"]:
+                        content += data["choices"][0]["delta"]["content"]
+
+            # 验证流式响应
+            assert len(chunks) > 0
+            assert content  # 确保有内容生成
+
+            # 验证第一个chunk包含role
+            assert "role" in chunks[0]["choices"][0]["delta"]
+            assert chunks[0]["choices"][0]["delta"]["role"] == "assistant"
+
+            # 验证最后一个chunk包含finish_reason
+            assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_parameters(test_client):
+    """测试对话参数设置"""
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [
+            {"role": "system", "content": "你是一个助手"},
+            {"role": "user", "content": "你好"}
+        ],
+        "model": "gpt-4",
+        "temperature": 0.5,
+        "max_tokens": 100,
+        "stream": False
+    })
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"] == "gpt-4"  # 验证模型参数是否正确传递
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_validation(test_client):
+    """测试请求参数验证"""
+    # 测试空消息列表
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [],
+        "stream": False
+    })
+    assert response.status_code == 422
+
+    # 测试无效的temperature值
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [{"role": "user", "content": "你好"}],
+        "temperature": 3.0,
+        "stream": False
+    })
+    assert response.status_code == 422
+
+    # 测试无效的role值
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [{"role": "invalid_role", "content": "你好"}],
+        "stream": False
+    })
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_conversation(test_client):
+    """测试多轮对话"""
+    messages = [
+        {"role": "system", "content": "你是一个助手"},
+        {"role": "user", "content": "你好"},
+        {"role": "assistant", "content": "你好！我是一个AI助手。"},
+        {"role": "user", "content": "今天天气真好"}
+    ]
+
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": messages,
+        "stream": False
+    })
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["choices"]) == 1
+    assert "content" in data["choices"][0]["message"]
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_error_handling(test_client):
+    """测试错误处理"""
+    # 测试无效的JSON
+    response = test_client.post(
+        "/v1/chat/completions",
+        data="invalid json",
+        headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+
+    # 测试缺少必要字段
+    response = test_client.post("/v1/chat/completions", json={
+        "stream": False
+    })
+    assert response.status_code == 422
+
+    # 测试无效的消息格式
+    response = test_client.post("/v1/chat/completions", json={
+        "messages": [{"invalid_field": "test"}],
+        "stream": False
+    })
+    assert response.status_code == 422
