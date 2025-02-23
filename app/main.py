@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes.chat import router
+from app.routes import chat, token
 import logging
 
 # 配置日志
@@ -17,4 +17,5 @@ logger = logging.getLogger(__name__)
 logger.debug("应用启动")
 
 app = FastAPI()
-app.include_router(router)
+app.include_router(chat.router)
+app.include_router(token.router)
