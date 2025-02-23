@@ -97,7 +97,15 @@ async def root():
 
 @router.get("/redirect")
 async def redirect(url: str, token: str):
-    return RedirectResponse(url=f"https://{url}", headers={"Set-Cookie": f"token={token}"})
+    cookie_settings = (
+        f"token={token}; "
+        "SameSite=Lax; "  # 允许在同源 iframe 中访问
+        "Path=/"  # 设置 cookie 路径
+    )
+    return RedirectResponse(
+        url=f"http://{url}",  # 使用 http 而不是 https
+        headers={"Set-Cookie": cookie_settings}
+    )
 
 
 key_value_db = {}
