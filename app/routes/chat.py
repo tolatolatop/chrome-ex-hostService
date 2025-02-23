@@ -70,11 +70,6 @@ async def fake_chat_stream():
     yield "data: [DONE]\n\n"
 
 
-@router.get("/")
-async def get():
-    return HTMLResponse(html)
-
-
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_connection.handle_connection(websocket)
