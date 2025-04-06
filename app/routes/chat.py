@@ -7,9 +7,11 @@ import json
 from pydantic import BaseModel, Field
 import asyncio
 from datetime import datetime
+import logging
 
 router = APIRouter()
 ws_connection = WebSocketConnection()
+logger = logging.getLogger(__name__)
 
 
 class Message(BaseModel):
@@ -76,8 +78,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @router.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest):
+async def chat_completions(rq: Request, request: ChatRequest):
     """ChatGPT风格的对话接口"""
+    d = await rq.body()
+    logger.info(f"chat_completions request: \n{d.decode('utf-8')}\n")
     if request.stream:
         # 流式响应
         return StreamingResponse(

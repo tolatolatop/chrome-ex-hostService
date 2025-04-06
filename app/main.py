@@ -23,5 +23,5 @@ app = FastAPI()
 init_db()
 
 app.include_router(chat.router)
-app.include_router(token.router)
+# app.include_router(token.router)
 app.include_router(school.router)
