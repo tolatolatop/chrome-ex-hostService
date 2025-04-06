@@ -3,16 +3,20 @@ from sqlalchemy.orm import Session
 from typing import List
 from ..models.database import get_db
 from ..models.models import Teacher, Course, Student, Grade
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/school", tags=["school"])
+router = APIRouter(
+    prefix="/school",
+    tags=["school"],
+    responses={404: {"description": "Not found"}},
+)
 
 # Pydantic 模型
 
 
 class TeacherBase(BaseModel):
-    name: str
-    email: str
+    name: str = Field(..., description="教师姓名", example="张三")
+    email: str = Field(..., description="教师邮箱", example="zhangsan@example.com")
 
 
 class TeacherCreate(TeacherBase):
@@ -20,15 +24,15 @@ class TeacherCreate(TeacherBase):
 
 
 class Teacher(TeacherBase):
-    id: int
+    id: int = Field(..., description="教师ID", example=1)
 
     class Config:
         from_attributes = True
 
 
 class CourseBase(BaseModel):
-    name: str
-    description: str
+    name: str = Field(..., description="课程名称", example="高等数学")
+    description: str = Field(..., description="课程描述", example="大学基础数学课程")
 
 
 class CourseCreate(CourseBase):
@@ -36,16 +40,16 @@ class CourseCreate(CourseBase):
 
 
 class Course(CourseBase):
-    id: int
-    teachers: List[Teacher] = []
+    id: int = Field(..., description="课程ID", example=1)
+    teachers: List[Teacher] = Field(default=[], description="授课教师列表")
 
     class Config:
         from_attributes = True
 
 
 class StudentBase(BaseModel):
-    name: str
-    email: str
+    name: str = Field(..., description="学生姓名", example="李四")
+    email: str = Field(..., description="学生邮箱", example="lisi@example.com")
 
 
 class StudentCreate(StudentBase):
@@ -53,16 +57,16 @@ class StudentCreate(StudentBase):
 
 
 class Student(StudentBase):
-    id: int
+    id: int = Field(..., description="学生ID", example=1)
 
     class Config:
         from_attributes = True
 
 
 class GradeBase(BaseModel):
-    score: float
-    student_id: int
-    course_id: int
+    score: float = Field(..., description="成绩分数", example=85.5, ge=0, le=100)
+    student_id: int = Field(..., description="学生ID", example=1)
+    course_id: int = Field(..., description="课程ID", example=1)
 
 
 class GradeCreate(GradeBase):
@@ -70,9 +74,9 @@ class GradeCreate(GradeBase):
 
 
 class Grade(GradeBase):
-    id: int
-    student: Student
-    course: Course
+    id: int = Field(..., description="成绩ID", example=1)
+    student: Student = Field(..., description="学生信息")
+    course: Course = Field(..., description="课程信息")
 
     class Config:
         from_attributes = True
@@ -80,7 +84,13 @@ class Grade(GradeBase):
 # 教师相关API
 
 
-@router.post("/teachers/", response_model=Teacher)
+@router.post(
+    "/teachers/",
+    response_model=Teacher,
+    summary="创建新教师",
+    description="创建一个新的教师记录",
+    response_description="返回创建的教师信息"
+)
 def create_teacher(teacher: TeacherCreate, db: Session = Depends(get_db)):
     db_teacher = Teacher(**teacher.model_dump())
     db.add(db_teacher)
@@ -89,14 +99,29 @@ def create_teacher(teacher: TeacherCreate, db: Session = Depends(get_db)):
     return db_teacher
 
 
-@router.get("/teachers/", response_model=List[Teacher])
-def read_teachers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get(
+    "/teachers/",
+    response_model=List[Teacher],
+    summary="获取教师列表",
+    description="获取所有教师的列表，支持分页",
+    response_description="返回教师列表"
+)
+def read_teachers(skip: int = Field(0, description="跳过的记录数", example=0),
+                  limit: int = Field(100, description="返回的最大记录数", example=100),
+                  db: Session = Depends(get_db)):
     teachers = db.query(Teacher).offset(skip).limit(limit).all()
     return teachers
 
 
-@router.get("/teachers/{teacher_id}", response_model=Teacher)
-def read_teacher(teacher_id: int, db: Session = Depends(get_db)):
+@router.get(
+    "/teachers/{teacher_id}",
+    response_model=Teacher,
+    summary="获取教师详情",
+    description="根据ID获取特定教师的详细信息",
+    response_description="返回教师详细信息"
+)
+def read_teacher(teacher_id: int = Field(..., description="教师ID", example=1),
+                 db: Session = Depends(get_db)):
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if teacher is None:
         raise HTTPException(status_code=404, detail="Teacher not found")
@@ -105,7 +130,13 @@ def read_teacher(teacher_id: int, db: Session = Depends(get_db)):
 # 课程相关API
 
 
-@router.post("/courses/", response_model=Course)
+@router.post(
+    "/courses/",
+    response_model=Course,
+    summary="创建新课程",
+    description="创建一个新的课程记录",
+    response_description="返回创建的课程信息"
+)
 def create_course(course: CourseCreate, db: Session = Depends(get_db)):
     db_course = Course(**course.model_dump())
     db.add(db_course)
@@ -114,14 +145,29 @@ def create_course(course: CourseCreate, db: Session = Depends(get_db)):
     return db_course
 
 
-@router.get("/courses/", response_model=List[Course])
-def read_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get(
+    "/courses/",
+    response_model=List[Course],
+    summary="获取课程列表",
+    description="获取所有课程的列表，支持分页",
+    response_description="返回课程列表"
+)
+def read_courses(skip: int = Field(0, description="跳过的记录数", example=0),
+                 limit: int = Field(100, description="返回的最大记录数", example=100),
+                 db: Session = Depends(get_db)):
     courses = db.query(Course).offset(skip).limit(limit).all()
     return courses
 
 
-@router.get("/courses/{course_id}", response_model=Course)
-def read_course(course_id: int, db: Session = Depends(get_db)):
+@router.get(
+    "/courses/{course_id}",
+    response_model=Course,
+    summary="获取课程详情",
+    description="根据ID获取特定课程的详细信息",
+    response_description="返回课程详细信息"
+)
+def read_course(course_id: int = Field(..., description="课程ID", example=1),
+                db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == course_id).first()
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -130,7 +176,13 @@ def read_course(course_id: int, db: Session = Depends(get_db)):
 # 学生相关API
 
 
-@router.post("/students/", response_model=Student)
+@router.post(
+    "/students/",
+    response_model=Student,
+    summary="创建新学生",
+    description="创建一个新的学生记录",
+    response_description="返回创建的学生信息"
+)
 def create_student(student: StudentCreate, db: Session = Depends(get_db)):
     db_student = Student(**student.model_dump())
     db.add(db_student)
@@ -139,14 +191,29 @@ def create_student(student: StudentCreate, db: Session = Depends(get_db)):
     return db_student
 
 
-@router.get("/students/", response_model=List[Student])
-def read_students(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get(
+    "/students/",
+    response_model=List[Student],
+    summary="获取学生列表",
+    description="获取所有学生的列表，支持分页",
+    response_description="返回学生列表"
+)
+def read_students(skip: int = Field(0, description="跳过的记录数", example=0),
+                  limit: int = Field(100, description="返回的最大记录数", example=100),
+                  db: Session = Depends(get_db)):
     students = db.query(Student).offset(skip).limit(limit).all()
     return students
 
 
-@router.get("/students/{student_id}", response_model=Student)
-def read_student(student_id: int, db: Session = Depends(get_db)):
+@router.get(
+    "/students/{student_id}",
+    response_model=Student,
+    summary="获取学生详情",
+    description="根据ID获取特定学生的详细信息",
+    response_description="返回学生详细信息"
+)
+def read_student(student_id: int = Field(..., description="学生ID", example=1),
+                 db: Session = Depends(get_db)):
     student = db.query(Student).filter(Student.id == student_id).first()
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -155,7 +222,13 @@ def read_student(student_id: int, db: Session = Depends(get_db)):
 # 成绩相关API
 
 
-@router.post("/grades/", response_model=Grade)
+@router.post(
+    "/grades/",
+    response_model=Grade,
+    summary="创建新成绩",
+    description="创建一个新的成绩记录",
+    response_description="返回创建的成绩信息"
+)
 def create_grade(grade: GradeCreate, db: Session = Depends(get_db)):
     # 检查学生和课程是否存在
     student = db.query(Student).filter(Student.id == grade.student_id).first()
@@ -172,14 +245,29 @@ def create_grade(grade: GradeCreate, db: Session = Depends(get_db)):
     return db_grade
 
 
-@router.get("/grades/", response_model=List[Grade])
-def read_grades(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get(
+    "/grades/",
+    response_model=List[Grade],
+    summary="获取成绩列表",
+    description="获取所有成绩的列表，支持分页",
+    response_description="返回成绩列表"
+)
+def read_grades(skip: int = Field(0, description="跳过的记录数", example=0),
+                limit: int = Field(100, description="返回的最大记录数", example=100),
+                db: Session = Depends(get_db)):
     grades = db.query(Grade).offset(skip).limit(limit).all()
     return grades
 
 
-@router.get("/grades/{grade_id}", response_model=Grade)
-def read_grade(grade_id: int, db: Session = Depends(get_db)):
+@router.get(
+    "/grades/{grade_id}",
+    response_model=Grade,
+    summary="获取成绩详情",
+    description="根据ID获取特定成绩的详细信息",
+    response_description="返回成绩详细信息"
+)
+def read_grade(grade_id: int = Field(..., description="成绩ID", example=1),
+               db: Session = Depends(get_db)):
     grade = db.query(Grade).filter(Grade.id == grade_id).first()
     if grade is None:
         raise HTTPException(status_code=404, detail="Grade not found")
@@ -188,8 +276,17 @@ def read_grade(grade_id: int, db: Session = Depends(get_db)):
 # 教师-课程关联API
 
 
-@router.post("/teachers/{teacher_id}/courses/{course_id}")
-def add_teacher_to_course(teacher_id: int, course_id: int, db: Session = Depends(get_db)):
+@router.post(
+    "/teachers/{teacher_id}/courses/{course_id}",
+    summary="分配教师到课程",
+    description="将特定教师分配到特定课程",
+    response_description="返回操作结果"
+)
+def add_teacher_to_course(
+    teacher_id: int = Field(..., description="教师ID", example=1),
+    course_id: int = Field(..., description="课程ID", example=1),
+    db: Session = Depends(get_db)
+):
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     course = db.query(Course).filter(Course.id == course_id).first()
 
