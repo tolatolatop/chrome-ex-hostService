@@ -21,6 +21,31 @@ class Message(BaseModel):
     name: Optional[str] = Field(None, description="可选的消息发送者名称")
 
 
+class ParameterProperty(BaseModel):
+    """参数属性模型"""
+    type: str = Field(..., description="参数类型")
+    description: str = Field(..., description="参数描述")
+
+
+class FunctionParameters(BaseModel):
+    """函数参数模型"""
+    type: str = Field(..., description="参数类型")
+    properties: Dict[str, ParameterProperty] = Field(..., description="参数属性")
+
+
+class ToolFunction(BaseModel):
+    """工具函数模型"""
+    name: str = Field(..., description="函数名称")
+    description: str = Field(..., description="函数描述")
+    parameters: FunctionParameters = Field(..., description="函数参数")
+
+
+class Tool(BaseModel):
+    """工具模型"""
+    type: str = Field(..., description="工具类型")
+    function: ToolFunction = Field(..., description="工具函数")
+
+
 class ChatRequest(BaseModel):
     """聊天请求模型"""
     messages: List[Message] = Field(..., description="消息历史")
@@ -28,6 +53,8 @@ class ChatRequest(BaseModel):
     model: str = Field("gpt-3.5-turbo", description="使用的模型名称")
     temperature: float = Field(0.7, description="温度参数", ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(None, description="最大生成token数")
+    tool_choice: Optional[str] = Field(None, description="工具选择")
+    tools: Optional[List[Tool]] = Field(None, description="工具列表")
 
 
 class ChatResponse(BaseModel):
@@ -78,10 +105,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @router.post("/v1/chat/completions")
-async def chat_completions(rq: Request, request: ChatRequest):
+async def chat_completions(request: ChatRequest):
     """ChatGPT风格的对话接口"""
-    d = await rq.body()
-    logger.info(f"chat_completions request: \n{d.decode('utf-8')}\n")
+    if request.tools:
+        logger.info(f"chat_completions request: \n{request.tools}\n")
     if request.stream:
         # 流式响应
         return StreamingResponse(
