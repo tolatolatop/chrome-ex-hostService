@@ -2,6 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from app.settings import SQL_URI, get_db_connect_args
 
 # 默认使用内存中的SQLite数据库
 DEFAULT_DATABASE_URL = "sqlite:///:memory:"
@@ -15,8 +16,8 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args=connect_args,
+    SQL_URI,
+    connect_args=get_db_connect_args(),
     pool_pre_ping=True  # 启用连接池健康检查
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
