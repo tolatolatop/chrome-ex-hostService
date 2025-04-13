@@ -25,7 +25,7 @@ app = FastAPI(
             "description": "RPC服务"
         },
         {
-            "url": f"https://localhost:{settings.PORT}",
+            "url": f"http://localhost:{settings.PORT}",
             "description": "RPC服务"
         }
     ]
