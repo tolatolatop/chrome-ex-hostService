@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
 from typing import List
-from ..models.database import get_db
-from ..models.models import (
+from app.models.database import get_db
+from app.models.school import (
     Teacher as TeacherModel,
     Course as CourseModel,
     Student as StudentModel,
