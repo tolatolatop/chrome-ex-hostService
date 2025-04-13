@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from app.models.database import Base
@@ -23,9 +23,9 @@ class Credential(Base):
     credential_type = Column(Enum(CredentialType),
                              nullable=False, default=CredentialType.OTHER)
     expire_time = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow,
-                        onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC),
+                        onupdate=lambda: datetime.now(UTC))
 
     def __repr__(self):
         return f"<Credential(id={self.id}, owner={self.owner}, type={self.credential_type}, expire_time={self.expire_time})>"
