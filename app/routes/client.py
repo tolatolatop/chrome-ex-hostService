@@ -11,6 +11,7 @@ router = APIRouter()
 @router.websocket("/ws/{uid}/client")
 async def websocket_endpoint(websocket: WebSocket, uid: str):
     await websocket.accept()
+    channel.destory_channel(uid)
     channel.create_channel(uid)
     while True:
         try:
