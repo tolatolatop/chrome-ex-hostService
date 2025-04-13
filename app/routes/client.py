@@ -26,6 +26,7 @@ async def websocket_endpoint(websocket: WebSocket, uid: str):
                     continue
                 logger.info("send response %s %s", uid, response_message.data)
                 await channel.send_response(uid, message.request_id, response_message.data)
+                break
         except WebSocketDisconnect:
             break
         except Exception as e:
