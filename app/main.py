@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from app.routes import school
 from app.routes import client
 from app.routes import echo
 from app.models.init_db import init_db
 from app.logs import setup_logging, get_logger
+from asyncio import TimeoutError
 
 # 配置日志
 setup_logging()
@@ -18,3 +20,11 @@ init_db()
 app.include_router(school.router)
 app.include_router(client.router)
 app.include_router(echo.router)
+
+
+@app.exception_handler(TimeoutError)
+async def timeout_exception_handler(request: Request, exc: TimeoutError):
+    return JSONResponse(
+        status_code=408,
+        content={"detail": "Request timeout: No response received from client"}
+    )

@@ -15,6 +15,11 @@ async def echo(
     message: str = Query(..., description="要回显的消息"),
     x_user_id: str = Header(..., description="用户ID")
 ):
-    # 发送消息到用户频道
-    response = await channel.single_request(x_user_id, {"message": message}, timeout=10)
-    return response.data
+    try:
+        response = await channel.single_request(x_user_id, {"message": message}, timeout=10)
+        return response.data
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
