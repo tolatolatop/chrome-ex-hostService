@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.routes import school
+from app.routes import client
 from app.models.init_db import init_db
 from app.logs import setup_logging, get_logger
 
@@ -14,3 +15,4 @@ app = FastAPI()
 init_db()
 
 app.include_router(school.router)
+app.include_router(client.router)

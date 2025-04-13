@@ -52,6 +52,11 @@ class Channel:
         channel = self.create_channel(key)
         channel.put_nowait(message)
 
+    async def receive_request(self, user_id: str) -> RequestMessage:
+        key = user_id
+        channel = self.create_channel(key)
+        return await channel.get()
+
     async def receive_response(self, user_id: str, request_id: str, timeout: int = 10) -> ResponseMessage:
         key = f"{user_id}:{request_id}"
         channel = self.create_channel(key)
