@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import chat, token, school
+from app.routes import school
 from app.models.init_db import init_db
 import logging
 
@@ -22,6 +22,4 @@ app = FastAPI()
 # 初始化数据库
 init_db()
 
-app.include_router(chat.router)
-# app.include_router(token.router)
 app.include_router(school.router)

@@ -1,5 +1,5 @@
 from .database import engine, Base
-from .models import Teacher, Course, Student, Grade
+from .school import Teacher, Course, Student, Grade
 
 
 def init_db():
