@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from app.routes import school
 from app.routes import client
 from app.routes import echo
+from app.routes import baidu
 from app.models.init_db import init_db
 from app.logs import setup_logging, get_logger
 from asyncio import TimeoutError
@@ -20,6 +21,7 @@ init_db()
 app.include_router(school.router)
 app.include_router(client.router)
 app.include_router(echo.router)
+app.include_router(baidu.router)
 
 
 @app.exception_handler(TimeoutError)
