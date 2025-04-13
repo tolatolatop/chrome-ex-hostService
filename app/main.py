@@ -9,7 +9,7 @@ from app.routes import baidu
 from app.models.init_db import init_db
 from app.logs import setup_logging, get_logger
 from asyncio import TimeoutError
-from app.settings import settings
+from . import settings
 # 配置日志
 setup_logging()
 logger = get_logger(__name__)
@@ -20,10 +20,10 @@ app = FastAPI(
     description="RPC服务",
     version="0.1.0",
     servers=[
-        Server(
-            url=f"http://{settings.HOST}:{settings.PORT}",
-            description="RPC服务"
-        )
+        {
+            "url": f"http://{settings.HOST}:{settings.PORT}",
+            "description": "RPC服务"
+        }
     ]
 )
 
