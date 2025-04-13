@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ..channel import channel, Message, ResponseMessage
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,10 @@ async def websocket_endpoint(websocket: WebSocket, uid: str):
             await websocket.send_json(data)
             while True:
                 response = await websocket.receive_json()
-                response_message = ResponseMessage(**response)
+                response_message = parse_response(response)
+                if response_message is None:
+                    logger.info("drop response %s %s", uid, response)
+                    continue
                 if response_message.request_id != message.request_id:
                     logger.info("drop response %s %s", uid,
                                 response_message.data)
@@ -33,3 +37,11 @@ async def websocket_endpoint(websocket: WebSocket, uid: str):
             logger.error(f"Error: {e}")
             break
     channel.destory_channel(uid)
+
+
+def parse_response(response: dict) -> Optional[ResponseMessage]:
+    try:
+        return ResponseMessage.model_validate(response)
+    except Exception as e:
+        logger.error("parse response error %s", response)
+        return None
