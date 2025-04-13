@@ -25,3 +25,8 @@ LOG_HANDLERS = [
     logging.StreamHandler(),  # 输出到控制台
     logging.FileHandler(LOG_FILE)  # 输出到文件
 ]
+
+
+# HOST
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = os.getenv("PORT", 8000)
