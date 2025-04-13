@@ -11,6 +11,10 @@ services:
       - ./tests:/app/tests
     environment:
       - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
@@ -18,4 +22,22 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # 如果需要添加数据库或其他服务，可以在这里添加 
+  redis:
+    image: redis:7.0
+    container_name: websocket_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+# 如果需要添加数据库或其他服务，可以在这里添加 
